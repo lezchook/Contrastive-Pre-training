@@ -17,46 +17,64 @@ def get_batches(queries, passages, batch_size):
     pending = []
     current_batch = {"question": [], "context": []}
     current_passages = set()
+    current_questions = set()
 
     def process_pending():
-        nonlocal current_batch, current_passages, pending
+        nonlocal current_batch, current_passages, current_questions, pending
         new_pending = []
         for q, p in pending:
-            if p not in current_passages and len(current_batch["question"]) < batch_size:
+            if (p not in current_passages and 
+                q not in current_questions and 
+                len(current_batch["question"]) < batch_size):
                 current_batch["question"].append(q)
                 current_batch["context"].append(p)
                 current_passages.add(p)
+                current_questions.add(q)
             else:
                 new_pending.append((q, p))
         pending = new_pending
 
     for q, p in zip(queries, passages):
-        if p in current_passages:
+        if p in current_passages or q in current_questions:
             pending.append((q, p))
         else:
             current_batch["question"].append(q)
             current_batch["context"].append(p)
             current_passages.add(p)
+            current_questions.add(q)
 
         if len(current_batch["question"]) == batch_size:
             batches.append(current_batch)
             current_batch = {"question": [], "context": []}
             current_passages = set()
+            current_questions = set()
             process_pending()
-    
-    
+
     while pending and len(current_batch["question"]) < batch_size:
         q, p = pending.pop(0)
-        if p not in current_passages:
+        if p not in current_passages and q not in current_questions:
             current_batch["question"].append(q)
             current_batch["context"].append(p)
             current_passages.add(p)
+            current_questions.add(q)
         else:
             pending.append((q, p))
-            if all(p in current_passages for _, p in pending):
+            if all(p in current_passages or q in current_questions for q, p in pending):
                 break
-            
+
     if current_batch["question"]:
         batches.append(current_batch)
 
     return batches
+
+
+def validate_batches(batches):
+    for i, batch in enumerate(batches):
+        questions = batch["question"]
+        contexts = batch["context"]
+
+        if len(questions) != len(set(questions)):
+            print(f"Repeated questions in batch {i}")
+        if len(contexts) != len(set(contexts)):
+            print(f"Repeated passages in a batch {i}")
+    print("Verification completed")
